@@ -1,5 +1,6 @@
 package cat.dam.roig.roigmediapollingcomponent;
 
+import java.io.File;
 import java.io.Serializable;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
@@ -252,5 +253,70 @@ public class RoigMediaPollingComponent extends JPanel implements Serializable {
                 ex.printStackTrace();
             }
         }
+    }
+
+    // ==== METODOS WRAPPERS APICLIENT ====
+    /**
+     * Envuelve la llamada a ApiClient.login y actualiza la propiedad token.
+     *
+     * @param email email del usuario
+     * @param password contraseña del usuario
+     * @return el token JWT devuelto por la API
+     * @throws Exception si falla el login
+     */
+    public String login(String email, String password) throws Exception {
+        ensureApiClient();
+        String jwt = apiClient.login(email, password);
+        // Actualizamos la propiedad del componente
+        setToken(jwt);
+        return jwt;
+    }
+
+    /**
+     * Devuelve el nickname de un usuario a partir de su id.
+     *
+     * @param userId id del usuario
+     * @return nickname del usuario
+     * @throws Exception si la llamada a la API falla
+     */
+    public String getNickName(int userId) throws Exception {
+        ensureApiClient();
+        return apiClient.getNickName(userId, token);
+    }
+
+    /**
+     * Obtiene todos los recursos Media disponibles en la DI Media Net.
+     *
+     * @return lista de Media
+     * @throws Exception si la llamada a la API falla
+     */
+    public List<Media> getAllMedia() throws Exception {
+        ensureApiClient();
+        return apiClient.getAllMedia(token);
+    }
+
+    /**
+     * Descarga un recurso Media al fichero indicado.
+     *
+     * @param mediaId id del Media a descargar
+     * @param destFile fichero de destino en disco
+     * @throws Exception si la descarga falla
+     */
+    public void download(int mediaId, File destFile) throws Exception {
+        ensureApiClient();
+        apiClient.download(mediaId, destFile, token);
+    }
+
+    /**
+     * Sube un fichero a la DI Media Net.
+     *
+     * @param file fichero a subir
+     * @param downloadedFromUrl URL original desde donde se descargó (opcional)
+     * @return respuesta de la API en formato String
+     * @throws Exception si la subida falla
+     */
+    public String uploadFileMultipart(File file, String downloadedFromUrl) throws Exception {
+        ensureApiClient();
+        return apiClient.uploadFileMultipart(file, downloadedFromUrl, token);
     }
 }
