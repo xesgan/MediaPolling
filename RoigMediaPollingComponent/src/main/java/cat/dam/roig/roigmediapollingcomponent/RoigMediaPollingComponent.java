@@ -1,4 +1,3 @@
-
 package cat.dam.roig.roigmediapollingcomponent;
 
 import java.io.Serializable;
@@ -23,15 +22,18 @@ public class RoigMediaPollingComponent extends JPanel implements Serializable {
     private String token;
     private String lastChecked;
     private transient Timer pollingTimer;
-    
+
     // Conjunto de IDs de media que el componente ya conoce
     private final Set<Integer> knownMediaIds = new HashSet<>();
-    
+
     // ApiClient instancia
     private ApiClient apiClient;
-    
+
+    // Lista de objetos que recibiran eventos nuevos Media
+    private final List<MediaListener> mediaListeners = new ArrayList<>();
+
     public static void main(String[] args) {
-        
+
     }
 
     public String getApiUrl() {
@@ -49,14 +51,18 @@ public class RoigMediaPollingComponent extends JPanel implements Serializable {
     public void setRunning(boolean running) {
         boolean oldRunning = this.running;
         this.running = running;
-        
+
         // Si el estado no ha cambiado no hacemos nada
-        if (oldRunning == running) return;
-        
+        if (oldRunning == running) {
+            return;
+        }
+
         if (running) {
             // Esto asegura que la primera llamada a la API no envie null como fecha
-            if (lastChecked == null || lastChecked.isBlank()) updateLastChecked();
-            
+            if (lastChecked == null || lastChecked.isBlank()) {
+                updateLastChecked();
+            }
+
             // Nos aseguramos de que el timer exista
             initTimer();
             if (!pollingTimer.isRunning()) {
@@ -75,7 +81,7 @@ public class RoigMediaPollingComponent extends JPanel implements Serializable {
 
     public void setPollingInterval(int pollingInterval) {
         this.pollingInterval = pollingInterval;
-        
+
         // Si ya tenemos un timer creado, actualizamos su delay
         if (pollingTimer != null) {
             int intervalSeconds = (pollingInterval > 0) ? pollingInterval : 10;
@@ -98,9 +104,8 @@ public class RoigMediaPollingComponent extends JPanel implements Serializable {
     public void setLastChecked(String lastChecked) {
         this.lastChecked = lastChecked;
     }
-    
+
     // ==== METODOS TIMER ====
-    
     /**
      * Init timer solo se asegura de que el Timer exista,
      */
@@ -109,66 +114,68 @@ public class RoigMediaPollingComponent extends JPanel implements Serializable {
         if (pollingTimer != null) {
             return;
         }
-        
+
         // Si el intervalo es menor o igual a 0, ponemos un valor por defecto ponemos por ejemplo 10s
         int intervalSeconds = (pollingInterval > 0) ? pollingInterval : 10;
         int delayMillis = intervalSeconds * 1000;
-        
+
         pollingTimer = new Timer(delayMillis, (e) -> {
             // Aqui luego llamaremos al metodo que consultara el servidor
-             checkServerForNewMedia();
+            checkServerForNewMedia();
         });
         pollingTimer.setRepeats(true);
     }
-    
+
     private void checkServerForNewMedia() {
         // Implementar mas adelante
         // 1. Validaciones basicas
-        if (!running) return; // Si el componente no esta activo, no hacemos nada
-        
-        if (token == null || token.isBlank()) return; // No tenemos token valido, no podemos llamar a la api
-        
-        if (apiUrl == null || apiUrl.isBlank()) return; // No tenemos url de la api
-        
+        if (!running) {
+            return; // Si el componente no esta activo, no hacemos nada
+        }
+        if (token == null || token.isBlank()) {
+            return; // No tenemos token valido, no podemos llamar a la api
+        }
+        if (apiUrl == null || apiUrl.isBlank()) {
+            return; // No tenemos url de la api
+        }
         try {
             // 2. Aseguramos el tener ApiClient
             ensureApiClient();
-            
+
             // 3. Llamamos a la API para obtener todos los media
             // Convertirmos lastChecked al formato esperado por la API (ISO-8601)
             String from = lastChecked;
-            
+
             // 3.1 Pedimos solo lo nuevo
             List<Media> newFromServer = apiClient.getMediaAddedSince(from, token);
-            
+
             if (newFromServer == null || newFromServer.isEmpty()) {
                 updateLastChecked();
                 return; // No hay nada nuevo
             }
-            
+
             // 3.2 Detectamos realmente nuevos
             List<Media> newItems = new ArrayList<>();
-            
+
             for (Media m : newFromServer) {
                 int id = m.id;
-                
+
                 if (!knownMediaIds.contains(id)) {
                     knownMediaIds.add(id);
                     newItems.add(m);
                 }
-                
+
                 // 3.3 Emitimos evento
                 if (!newItems.isEmpty()) {
                     fireNewMediaEvent(newItems);
                 }
             }
-            
+
             // 5. Siguientes pasos:
             // - compararemos allMedia con knownMediaIds
             // - detectaremos cuales son nuevos
             // - actualizaremos kownmediaIds
             // - lanzaremos el evento si hay nuevos
-        
         } catch (Exception ex) {
             ex.printStackTrace();
         } finally {
@@ -176,16 +183,74 @@ public class RoigMediaPollingComponent extends JPanel implements Serializable {
             updateLastChecked();
         }
     }
-    
+
     // ==== METODOS APICLIENT ====
     private void ensureApiClient() {
-        if (apiClient != null) return;
-        
+        if (apiClient != null) {
+            return;
+        }
+
         apiClient = new ApiClient(apiUrl);
     }
-    
+
     private void updateLastChecked() {
         String now = LocalDateTime.now().format(DateTimeFormatter.ISO_LOCAL_DATE_TIME);
         this.lastChecked = now;
+    }
+
+    // ==== METODOS ADD/REMOVE LISTENERS ====
+    /**
+     * Registra un nuevo listener para eventos de nuevos Media.
+     *
+     * @param listener listener a registrar
+     */
+    public void addMediaListener(MediaListener listener) {
+
+        if (listener == null) {
+            return;  // No hay nadie escuchando
+        }
+        if (!mediaListeners.contains(listener)) {
+            mediaListeners.add(listener);
+        }
+    }
+
+    /**
+     * Elimina un listener previamente registrado.
+     *
+     * @param listener listener a eliminar
+     */
+    public void removeMediaListener(MediaListener listener) {
+        mediaListeners.remove(listener);
+    }
+
+    /**
+     * Lanza un evento MediaEvent a todos los listeners registrados.
+     *
+     * @param newItems lista de nuevos Media detectados
+     */
+    protected void fireNewMediaEvent(List<Media> newItems) {
+        if (newItems == null || newItems.isEmpty()) {
+            return;
+        }
+
+        if (mediaListeners.isEmpty()) {
+            return;
+        }
+
+        // Fecha/hora actual en formato ISO-8601
+        String discoverAt = LocalDateTime.now().format(DateTimeFormatter.ISO_LOCAL_DATE_TIME);
+
+        MediaEvent event = new MediaEvent(this, newItems, discoverAt);
+
+        // Hacemos una copia para evitar ConcurrentModificationException
+        List<MediaListener> snapshot = new ArrayList<>(mediaListeners);
+
+        for (MediaListener listener : snapshot) {
+            try {
+                listener.onNewMediaFound(event);
+            } catch (Exception ex) {
+                ex.printStackTrace();
+            }
+        }
     }
 }
