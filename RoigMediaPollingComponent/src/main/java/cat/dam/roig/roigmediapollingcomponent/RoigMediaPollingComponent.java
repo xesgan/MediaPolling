@@ -1,13 +1,163 @@
 
 package cat.dam.roig.roigmediapollingcomponent;
 
+import java.io.Serializable;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
+import javax.swing.JPanel;
+import javax.swing.Timer;
+
 /**
  *
  * @author metku
  */
-public class RoigMediaPollingComponent {
+public class RoigMediaPollingComponent extends JPanel implements Serializable {
 
+    private String apiUrl;
+    private boolean running;
+    private int pollingInterval;
+    private String token;
+    private String lastChecked;
+    private transient Timer pollingTimer;
+    
+    // Conjunto de IDs de media que el componente ya conoce
+    private final Set<Integer> knownMediaIds = new HashSet<>();
+    
+    // ApiClient instancia
+    private ApiClient apiClient;
+    
     public static void main(String[] args) {
         
+    }
+
+    public String getApiUrl() {
+        return apiUrl;
+    }
+
+    public void setApiUrl(String apiUrl) {
+        this.apiUrl = apiUrl;
+    }
+
+    public boolean isRunning() {
+        return running;
+    }
+
+    public void setRunning(boolean running) {
+        boolean oldRunning = this.running;
+        this.running = running;
+        
+        // Si el estado no ha cambiado no hacemos nada
+        if (oldRunning == running) return;
+        
+        if (running) {
+            // Nos aseguramos de que el timer exista
+            initTimer();
+            if (!pollingTimer.isRunning()) {
+                pollingTimer.start();
+            } else {
+                if (pollingTimer != null && pollingTimer.isRunning()) {
+                    pollingTimer.stop();
+                }
+            }
+        }
+    }
+
+    public int getPollingInterval() {
+        return pollingInterval;
+    }
+
+    public void setPollingInterval(int pollingInterval) {
+        this.pollingInterval = pollingInterval;
+        
+        // Si ya tenemos un timer creado, actualizamos su delay
+        if (pollingTimer != null) {
+            int intervalSeconds = (pollingInterval > 0) ? pollingInterval : 10;
+            pollingTimer.setDelay(intervalSeconds * 1000);
+        }
+    }
+
+    public String getToken() {
+        return token;
+    }
+
+    public void setToken(String token) {
+        this.token = token;
+    }
+
+    public String getLastChecked() {
+        return lastChecked;
+    }
+
+    public void setLastChecked(String lastChecked) {
+        this.lastChecked = lastChecked;
+    }
+    
+    // ==== METODOS TIMER ====
+    
+    /**
+     * Init timer solo se asegura de que el Timer exista,
+     */
+    private void initTimer() {
+        // Evitamos recrear el Timer si ya existe
+        if (pollingTimer != null) {
+            return;
+        }
+        
+        // Si el intervalo es menor o igual a 0, ponemos un valor por defecto ponemos por ejemplo 10s
+        int intervalSeconds = (pollingInterval > 0) ? pollingInterval : 10;
+        int delayMillis = intervalSeconds * 1000;
+        
+        pollingTimer = new Timer(delayMillis, (e) -> {
+            // Aqui luego llamaremos al metodo que consultara el servidor
+             checkServerForNewMedia();
+        });
+        pollingTimer.setRepeats(true);
+    }
+    
+    private void checkServerForNewMedia() {
+        // Implementar mas adelante
+        // 1. Validaciones basicas
+        if (!running) return; // Si el componente no esta activo, no hacemos nada
+        
+        if (token == null || token.isBlank()) return; // No tenemos token valido, no podemos llamar a la api
+        
+        if (apiUrl == null || apiUrl.isBlank()) return; // No tenemos url de la api
+        
+        try {
+            // 2. Aseguramos el tener ApiClient
+            ensureApiClient();
+            
+            // 3. Llamamos a la API para obtener todos los media
+            List<Media> allMedia = apiClient.getAllMedia(token);
+            
+            if (allMedia == null) return; // La lista esta vacia
+            
+            // 4. (De momento) solo actualizamos lastChecked
+            updateLastChecked();
+            
+            // 5. Siguientes pasos:
+            // - compararemos allMedia con knownMediaIds
+            // - detectaremos cuales son nuevos
+            // - actualizaremos kownmediaIds
+            // - lanzaremos el evento si hay nuevos
+        
+        } catch (Exception ex) {
+            ex.printStackTrace();
+        }
+    }
+    
+    // ==== METODOS APICLIENT ====
+    private void ensureApiClient() {
+        if (apiClient != null) return;
+        
+        apiClient = new ApiClient(apiUrl);
+    }
+    
+    private void updateLastChecked() {
+        String now = LocalDateTime.now().format(DateTimeFormatter.ISO_LOCAL_DATE_TIME);
+        this.lastChecked = now;
     }
 }

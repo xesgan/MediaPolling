@@ -10,4 +10,13 @@
         <maven.compiler.release>24</maven.compiler.release>
         <exec.mainClass>cat.dam.roig.roigmediapollingcomponent.RoigMediaPollingComponent</exec.mainClass>
     </properties>
+    
+    <dependencies>
+        <!-- https://mvnrepository.com/artifact/tools.jackson.core/jackson-databind -->
+        <dependency>
+            <groupId>tools.jackson.core</groupId>
+            <artifactId>jackson-databind</artifactId>
+            <version>3.0.0</version>
+        </dependency>
+    </dependencies>
 </project>
