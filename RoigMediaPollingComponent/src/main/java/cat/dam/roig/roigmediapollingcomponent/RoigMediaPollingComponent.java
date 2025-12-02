@@ -4,6 +4,7 @@ package cat.dam.roig.roigmediapollingcomponent;
 import java.io.Serializable;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -53,6 +54,9 @@ public class RoigMediaPollingComponent extends JPanel implements Serializable {
         if (oldRunning == running) return;
         
         if (running) {
+            // Esto asegura que la primera llamada a la API no envie null como fecha
+            if (lastChecked == null || lastChecked.isBlank()) updateLastChecked();
+            
             // Nos aseguramos de que el timer exista
             initTimer();
             if (!pollingTimer.isRunning()) {
@@ -131,12 +135,33 @@ public class RoigMediaPollingComponent extends JPanel implements Serializable {
             ensureApiClient();
             
             // 3. Llamamos a la API para obtener todos los media
-            List<Media> allMedia = apiClient.getAllMedia(token);
+            // Convertirmos lastChecked al formato esperado por la API (ISO-8601)
+            String from = lastChecked;
             
-            if (allMedia == null) return; // La lista esta vacia
+            // 3.1 Pedimos solo lo nuevo
+            List<Media> newFromServer = apiClient.getMediaAddedSince(from, token);
             
-            // 4. (De momento) solo actualizamos lastChecked
-            updateLastChecked();
+            if (newFromServer == null || newFromServer.isEmpty()) {
+                updateLastChecked();
+                return; // No hay nada nuevo
+            }
+            
+            // 3.2 Detectamos realmente nuevos
+            List<Media> newItems = new ArrayList<>();
+            
+            for (Media m : newFromServer) {
+                int id = m.id;
+                
+                if (!knownMediaIds.contains(id)) {
+                    knownMediaIds.add(id);
+                    newItems.add(m);
+                }
+                
+                // 3.3 Emitimos evento
+                if (!newItems.isEmpty()) {
+                    fireNewMediaEvent(newItems);
+                }
+            }
             
             // 5. Siguientes pasos:
             // - compararemos allMedia con knownMediaIds
@@ -146,6 +171,9 @@ public class RoigMediaPollingComponent extends JPanel implements Serializable {
         
         } catch (Exception ex) {
             ex.printStackTrace();
+        } finally {
+            // 4. Siempre actualizamos
+            updateLastChecked();
         }
     }
     
