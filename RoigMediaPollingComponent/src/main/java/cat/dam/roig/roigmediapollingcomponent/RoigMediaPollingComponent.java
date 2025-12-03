@@ -3,6 +3,8 @@ package cat.dam.roig.roigmediapollingcomponent;
 import java.io.File;
 import java.io.Serializable;
 import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -12,8 +14,35 @@ import javax.swing.JPanel;
 import javax.swing.Timer;
 
 /**
+ * <h2>Componente JavaBean para realizar polling contra la DI Media Net y detectar nuevos Media.</h2>
  *
- * @author metku
+ * <h3>Funciones principales:</h3>
+ * <ul>
+ *   <li>Login y gestión interna del token JWT.</li>
+ *   <li>Polling periódico con <code>javax.swing.Timer</code>.</li>
+ *   <li>Consulta incremental usando <code>getMediaAddedSince(lastChecked)</code>.</li>
+ *   <li>Registro de IDs conocidos para evitar notificar duplicados.</li>
+ *   <li>Emisión de eventos <code>MediaEvent</code> mediante <code>MediaListener</code>.</li>
+ *   <li>Wrappers simplificados de ApiClient (login, nickname, upload, download…).</li>
+ * </ul>
+ *
+ * <h3>Uso básico:</h3>
+ * <ol>
+ *   <li>Agregar el componente al formulario desde la Palette.</li>
+ *   <li>Configurar <code>apiUrl</code> y <code>pollingInterval</code>.</li>
+ *   <li>Hacer login desde código (el token se guarda automáticamente).</li>
+ *   <li>Registrar listeners: <code>addMediaListener(...)</code>.</li>
+ *   <li>Activar polling: <code>setRunning(true)</code>.</li>
+ * </ol>
+ *
+ * <h3>Notas:</h3>
+ * <ul>
+ *   <li>El Timer solo funciona si <code>running = true</code>.</li>
+ *   <li><code>lastChecked</code> usa formato ISO_OFFSET_DATE_TIME.</li>
+ *   <li><code>ApiClient</code> se inicializa automáticamente (lazy).</li>
+ *   <li><code>knownMediaIds</code> evita eventos repetidos.</li>
+ *   <li>El icono se carga desde <code>/images/poller.png</code>.</li>
+ * </ul>
  */
 public class RoigMediaPollingComponent extends JPanel implements Serializable {
 
@@ -24,299 +53,215 @@ public class RoigMediaPollingComponent extends JPanel implements Serializable {
     private String lastChecked;
     private transient Timer pollingTimer;
 
-    // Conjunto de IDs de media que el componente ya conoce
+    // IDs ya notificados
     private final Set<Integer> knownMediaIds = new HashSet<>();
 
-    // ApiClient instancia
+    // Cliente hacia la API
     private ApiClient apiClient;
 
-    // Lista de objetos que recibiran eventos nuevos Media
+    // Listeners registrados
     private final List<MediaListener> mediaListeners = new ArrayList<>();
 
-    public static void main(String[] args) {
 
-    }
+    // ===================== CONSTRUCTOR =====================
 
-    public String getApiUrl() {
-        return apiUrl;
-    }
+    public RoigMediaPollingComponent() {
+        super();
+        initLayoutAndIcon();
 
-    public void setApiUrl(String apiUrl) {
-        this.apiUrl = apiUrl;
-    }
-
-    public boolean isRunning() {
-        return running;
-    }
-
-    public void setRunning(boolean running) {
-        boolean oldRunning = this.running;
-        this.running = running;
-
-        // Si el estado no ha cambiado no hacemos nada
-        if (oldRunning == running) {
-            return;
+        if (pollingInterval <= 0) {
+            pollingInterval = 10;
         }
-
-        if (running) {
-            // Esto asegura que la primera llamada a la API no envie null como fecha
-            if (lastChecked == null || lastChecked.isBlank()) {
-                updateLastChecked();
-            }
-
-            // Nos aseguramos de que el timer exista
-            initTimer();
-            if (!pollingTimer.isRunning()) {
-                pollingTimer.start();
-            } else {
-                if (pollingTimer != null && pollingTimer.isRunning()) {
-                    pollingTimer.stop();
-                }
-            }
-        }
-    }
-
-    public int getPollingInterval() {
-        return pollingInterval;
-    }
-
-    public void setPollingInterval(int pollingInterval) {
-        this.pollingInterval = pollingInterval;
-
-        // Si ya tenemos un timer creado, actualizamos su delay
-        if (pollingTimer != null) {
-            int intervalSeconds = (pollingInterval > 0) ? pollingInterval : 10;
-            pollingTimer.setDelay(intervalSeconds * 1000);
-        }
-    }
-
-    public String getToken() {
-        return token;
-    }
-
-    public void setToken(String token) {
-        this.token = token;
-    }
-
-    public String getLastChecked() {
-        return lastChecked;
-    }
-
-    public void setLastChecked(String lastChecked) {
-        this.lastChecked = lastChecked;
-    }
-
-    // ==== METODOS TIMER ====
-    /**
-     * Init timer solo se asegura de que el Timer exista,
-     */
-    private void initTimer() {
-        // Evitamos recrear el Timer si ya existe
-        if (pollingTimer != null) {
-            return;
-        }
-
-        // Si el intervalo es menor o igual a 0, ponemos un valor por defecto ponemos por ejemplo 10s
-        int intervalSeconds = (pollingInterval > 0) ? pollingInterval : 10;
-        int delayMillis = intervalSeconds * 1000;
-
-        pollingTimer = new Timer(delayMillis, (e) -> {
-            // Aqui luego llamaremos al metodo que consultara el servidor
-            checkServerForNewMedia();
-        });
-        pollingTimer.setRepeats(true);
-    }
-
-    private void checkServerForNewMedia() {
-        // Implementar mas adelante
-        // 1. Validaciones basicas
-        if (!running) {
-            return; // Si el componente no esta activo, no hacemos nada
-        }
-        if (token == null || token.isBlank()) {
-            return; // No tenemos token valido, no podemos llamar a la api
-        }
-        if (apiUrl == null || apiUrl.isBlank()) {
-            return; // No tenemos url de la api
-        }
-        try {
-            // 2. Aseguramos el tener ApiClient
-            ensureApiClient();
-
-            // 3. Llamamos a la API para obtener todos los media
-            // Convertirmos lastChecked al formato esperado por la API (ISO-8601)
-            String from = lastChecked;
-
-            // 3.1 Pedimos solo lo nuevo
-            List<Media> newFromServer = apiClient.getMediaAddedSince(from, token);
-
-            if (newFromServer == null || newFromServer.isEmpty()) {
-                updateLastChecked();
-                return; // No hay nada nuevo
-            }
-
-            // 3.2 Detectamos realmente nuevos
-            List<Media> newItems = new ArrayList<>();
-
-            for (Media m : newFromServer) {
-                int id = m.id;
-
-                if (!knownMediaIds.contains(id)) {
-                    knownMediaIds.add(id);
-                    newItems.add(m);
-                }
-
-                // 3.3 Emitimos evento
-                if (!newItems.isEmpty()) {
-                    fireNewMediaEvent(newItems);
-                }
-            }
-
-            // 5. Siguientes pasos:
-            // - compararemos allMedia con knownMediaIds
-            // - detectaremos cuales son nuevos
-            // - actualizaremos kownmediaIds
-            // - lanzaremos el evento si hay nuevos
-        } catch (Exception ex) {
-            ex.printStackTrace();
-        } finally {
-            // 4. Siempre actualizamos
+        if (lastChecked == null) {
             updateLastChecked();
         }
     }
 
-    // ==== METODOS APICLIENT ====
-    private void ensureApiClient() {
-        if (apiClient != null) {
-            return;
-        }
 
-        apiClient = new ApiClient(apiUrl);
-    }
+    // ===================== GETTERS / SETTERS =====================
 
-    private void updateLastChecked() {
-        String now = LocalDateTime.now().format(DateTimeFormatter.ISO_LOCAL_DATE_TIME);
-        this.lastChecked = now;
-    }
+    public String getApiUrl() { return apiUrl; }
+    public void setApiUrl(String apiUrl) { this.apiUrl = apiUrl; }
 
-    // ==== METODOS ADD/REMOVE LISTENERS ====
-    /**
-     * Registra un nuevo listener para eventos de nuevos Media.
-     *
-     * @param listener listener a registrar
-     */
-    public void addMediaListener(MediaListener listener) {
+    public boolean isRunning() { return running; }
 
-        if (listener == null) {
-            return;  // No hay nadie escuchando
-        }
-        if (!mediaListeners.contains(listener)) {
-            mediaListeners.add(listener);
-        }
-    }
+    public void setRunning(boolean running) {
+        boolean prev = this.running;
+        this.running = running;
 
-    /**
-     * Elimina un listener previamente registrado.
-     *
-     * @param listener listener a eliminar
-     */
-    public void removeMediaListener(MediaListener listener) {
-        mediaListeners.remove(listener);
-    }
+        if (prev == running) return;
 
-    /**
-     * Lanza un evento MediaEvent a todos los listeners registrados.
-     *
-     * @param newItems lista de nuevos Media detectados
-     */
-    protected void fireNewMediaEvent(List<Media> newItems) {
-        if (newItems == null || newItems.isEmpty()) {
-            return;
-        }
-
-        if (mediaListeners.isEmpty()) {
-            return;
-        }
-
-        // Fecha/hora actual en formato ISO-8601
-        String discoverAt = LocalDateTime.now().format(DateTimeFormatter.ISO_LOCAL_DATE_TIME);
-
-        MediaEvent event = new MediaEvent(this, newItems, discoverAt);
-
-        // Hacemos una copia para evitar ConcurrentModificationException
-        List<MediaListener> snapshot = new ArrayList<>(mediaListeners);
-
-        for (MediaListener listener : snapshot) {
-            try {
-                listener.onNewMediaFound(event);
-            } catch (Exception ex) {
-                ex.printStackTrace();
+        if (running) {
+            if (lastChecked == null || lastChecked.isBlank()) {
+                updateLastChecked();
             }
+            initTimer();
+            if (!pollingTimer.isRunning()) pollingTimer.start();
+        } else {
+            if (pollingTimer != null && pollingTimer.isRunning()) pollingTimer.stop();
         }
     }
 
-    // ==== METODOS WRAPPERS APICLIENT ====
+    public int getPollingInterval() { return pollingInterval; }
+
+    public void setPollingInterval(int pollingInterval) {
+        this.pollingInterval = pollingInterval;
+        if (pollingTimer != null) {
+            int seconds = pollingInterval > 0 ? pollingInterval : 10;
+            pollingTimer.setDelay(seconds * 1000);
+        }
+    }
+
+    public String getToken() { return token; }
+    public void setToken(String token) { this.token = token; }
+
+    public String getLastChecked() { return lastChecked; }
+    public void setLastChecked(String lastChecked) { this.lastChecked = lastChecked; }
+
+
+    // ===================== ICONO =====================
+
+    private void initLayoutAndIcon() {
+        setLayout(new java.awt.BorderLayout());
+        javax.swing.JLabel label = new javax.swing.JLabel();
+        label.setHorizontalAlignment(javax.swing.SwingConstants.CENTER);
+
+        try {
+            var iconUrl = getClass().getResource("/images/poller.png");
+            if (iconUrl != null) {
+                label.setIcon(new javax.swing.ImageIcon(iconUrl));
+            } else {
+                System.err.println("No se encontró /images/poller.png");
+                label.setText("MediaPoller");
+            }
+        } catch (Exception ex) {
+            System.err.println("Error cargando icono: " + ex);
+            label.setText("MediaPoller");
+        }
+
+        add(label, java.awt.BorderLayout.CENTER);
+    }
+
+
+    // ===================== TIMER =====================
+
+    /** Crea el Timer si no existe. */
+    private void initTimer() {
+        if (pollingTimer != null) return;
+
+        int seconds = (pollingInterval > 0) ? pollingInterval : 10;
+        pollingTimer = new Timer(seconds * 1000, e -> checkServerForNewMedia());
+        pollingTimer.setRepeats(true);
+    }
+
+
+    // ===================== POLLING =====================
+
     /**
-     * Envuelve la llamada a ApiClient.login y actualiza la propiedad token.
-     *
-     * @param email email del usuario
-     * @param password contraseña del usuario
-     * @return el token JWT devuelto por la API
-     * @throws Exception si falla el login
+     * Método llamado periódicamente por el Timer.
+     * Obtiene media nuevos y lanza el evento si procede.
      */
+    private void checkServerForNewMedia() {
+        if (!running) return;
+        if (token == null || token.isBlank()) return;
+        if (apiUrl == null || apiUrl.isBlank()) return;
+
+        try {
+            ensureApiClient();
+
+            List<Media> server = apiClient.getMediaAddedSince(lastChecked, token);
+            if (server == null || server.isEmpty()) {
+                updateLastChecked();
+                return;
+            }
+
+            List<Media> fresh = new ArrayList<>();
+
+            for (Media m : server) {
+                int id = m.id; // o m.getId() si tu clase lo tiene
+                if (!knownMediaIds.contains(id)) {
+                    knownMediaIds.add(id);
+                    fresh.add(m);
+                }
+            }
+
+            if (!fresh.isEmpty()) {
+                fireNewMediaEvent(fresh);
+            }
+
+        } catch (Exception ex) {
+            ex.printStackTrace();
+        } finally {
+            updateLastChecked();
+        }
+    }
+
+
+    // ===================== API CLIENT =====================
+
+    /** Inicializa ApiClient si aún no existe. */
+    private void ensureApiClient() {
+        if (apiClient == null) apiClient = new ApiClient(apiUrl);
+    }
+
+    /** Actualiza lastChecked con la hora actual (UTC) en ISO_OFFSET_DATE_TIME. */
+    private void updateLastChecked() {
+        this.lastChecked = OffsetDateTime.now(ZoneOffset.UTC)
+                .format(DateTimeFormatter.ISO_OFFSET_DATE_TIME);
+    }
+
+
+    // ===================== EVENTOS =====================
+
+    public void addMediaListener(MediaListener l) {
+        if (l != null && !mediaListeners.contains(l)) mediaListeners.add(l);
+    }
+
+    public void removeMediaListener(MediaListener l) {
+        mediaListeners.remove(l);
+    }
+
+    /** Notifica a los listeners que se ha detectado nuevo media. */
+    protected void fireNewMediaEvent(List<Media> newItems) {
+        if (newItems == null || newItems.isEmpty()) return;
+        if (mediaListeners.isEmpty()) return;
+
+        String ts = LocalDateTime.now().format(DateTimeFormatter.ISO_LOCAL_DATE_TIME);
+        MediaEvent evt = new MediaEvent(this, newItems, ts);
+
+        for (MediaListener ml : new ArrayList<>(mediaListeners)) {
+            try { ml.onNewMediaFound(evt); }
+            catch (Exception ex) { ex.printStackTrace(); }
+        }
+    }
+
+
+    // ===================== WRAPPERS PÚBLICOS =====================
+
     public String login(String email, String password) throws Exception {
         ensureApiClient();
         String jwt = apiClient.login(email, password);
-        // Actualizamos la propiedad del componente
         setToken(jwt);
         return jwt;
     }
 
-    /**
-     * Devuelve el nickname de un usuario a partir de su id.
-     *
-     * @param userId id del usuario
-     * @return nickname del usuario
-     * @throws Exception si la llamada a la API falla
-     */
     public String getNickName(int userId) throws Exception {
         ensureApiClient();
         return apiClient.getNickName(userId, token);
     }
 
-    /**
-     * Obtiene todos los recursos Media disponibles en la DI Media Net.
-     *
-     * @return lista de Media
-     * @throws Exception si la llamada a la API falla
-     */
     public List<Media> getAllMedia() throws Exception {
         ensureApiClient();
         return apiClient.getAllMedia(token);
     }
 
-    /**
-     * Descarga un recurso Media al fichero indicado.
-     *
-     * @param mediaId id del Media a descargar
-     * @param destFile fichero de destino en disco
-     * @throws Exception si la descarga falla
-     */
     public void download(int mediaId, File destFile) throws Exception {
         ensureApiClient();
         apiClient.download(mediaId, destFile, token);
     }
 
-    /**
-     * Sube un fichero a la DI Media Net.
-     *
-     * @param file fichero a subir
-     * @param downloadedFromUrl URL original desde donde se descargó (opcional)
-     * @return respuesta de la API en formato String
-     * @throws Exception si la subida falla
-     */
-    public String uploadFileMultipart(File file, String downloadedFromUrl) throws Exception {
+    public String uploadFileMultipart(File f, String fromUrl) throws Exception {
         ensureApiClient();
-        return apiClient.uploadFileMultipart(file, downloadedFromUrl, token);
+        return apiClient.uploadFileMultipart(f, fromUrl, token);
     }
 }
