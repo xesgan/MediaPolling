@@ -14,34 +14,38 @@ import javax.swing.JPanel;
 import javax.swing.Timer;
 
 /**
- * <h2>Componente JavaBean para realizar polling contra la DI Media Net y detectar nuevos Media.</h2>
+ * <h2>Componente JavaBean para realizar polling contra la DI Media Net y
+ * detectar nuevos Media.</h2>
  *
  * <h3>Funciones principales:</h3>
  * <ul>
- *   <li>Login y gestión interna del token JWT.</li>
- *   <li>Polling periódico con <code>javax.swing.Timer</code>.</li>
- *   <li>Consulta incremental usando <code>getMediaAddedSince(lastChecked)</code>.</li>
- *   <li>Registro de IDs conocidos para evitar notificar duplicados.</li>
- *   <li>Emisión de eventos <code>MediaEvent</code> mediante <code>MediaListener</code>.</li>
- *   <li>Wrappers simplificados de ApiClient (login, nickname, upload, download…).</li>
+ * <li>Login y gestión interna del token JWT.</li>
+ * <li>Polling periódico con <code>javax.swing.Timer</code>.</li>
+ * <li>Consulta incremental usando
+ * <code>getMediaAddedSince(lastChecked)</code>.</li>
+ * <li>Registro de IDs conocidos para evitar notificar duplicados.</li>
+ * <li>Emisión de eventos <code>MediaEvent</code> mediante
+ * <code>MediaListener</code>.</li>
+ * <li>Wrappers simplificados de ApiClient (login, nickname, upload,
+ * download…).</li>
  * </ul>
  *
  * <h3>Uso básico:</h3>
  * <ol>
- *   <li>Agregar el componente al formulario desde la Palette.</li>
- *   <li>Configurar <code>apiUrl</code> y <code>pollingInterval</code>.</li>
- *   <li>Hacer login desde código (el token se guarda automáticamente).</li>
- *   <li>Registrar listeners: <code>addMediaListener(...)</code>.</li>
- *   <li>Activar polling: <code>setRunning(true)</code>.</li>
+ * <li>Agregar el componente al formulario desde la Palette.</li>
+ * <li>Configurar <code>apiUrl</code> y <code>pollingInterval</code>.</li>
+ * <li>Hacer login desde código (el token se guarda automáticamente).</li>
+ * <li>Registrar listeners: <code>addMediaListener(...)</code>.</li>
+ * <li>Activar polling: <code>setRunning(true)</code>.</li>
  * </ol>
  *
  * <h3>Notas:</h3>
  * <ul>
- *   <li>El Timer solo funciona si <code>running = true</code>.</li>
- *   <li><code>lastChecked</code> usa formato ISO_OFFSET_DATE_TIME.</li>
- *   <li><code>ApiClient</code> se inicializa automáticamente (lazy).</li>
- *   <li><code>knownMediaIds</code> evita eventos repetidos.</li>
- *   <li>El icono se carga desde <code>/images/poller.png</code>.</li>
+ * <li>El Timer solo funciona si <code>running = true</code>.</li>
+ * <li><code>lastChecked</code> usa formato ISO_OFFSET_DATE_TIME.</li>
+ * <li><code>ApiClient</code> se inicializa automáticamente (lazy).</li>
+ * <li><code>knownMediaIds</code> evita eventos repetidos.</li>
+ * <li>El icono se carga desde <code>/images/poller.png</code>.</li>
  * </ul>
  */
 public class RoigMediaPollingComponent extends JPanel implements Serializable {
@@ -62,9 +66,7 @@ public class RoigMediaPollingComponent extends JPanel implements Serializable {
     // Listeners registrados
     private final List<MediaListener> mediaListeners = new ArrayList<>();
 
-
     // ===================== CONSTRUCTOR =====================
-
     public RoigMediaPollingComponent() {
         super();
         initLayoutAndIcon();
@@ -77,32 +79,45 @@ public class RoigMediaPollingComponent extends JPanel implements Serializable {
         }
     }
 
-
     // ===================== GETTERS / SETTERS =====================
+    public String getApiUrl() {
+        return apiUrl;
+    }
 
-    public String getApiUrl() { return apiUrl; }
-    public void setApiUrl(String apiUrl) { this.apiUrl = apiUrl; }
+    public void setApiUrl(String apiUrl) {
+        this.apiUrl = apiUrl;
+    }
 
-    public boolean isRunning() { return running; }
+    public boolean isRunning() {
+        return running;
+    }
 
     public void setRunning(boolean running) {
         boolean prev = this.running;
         this.running = running;
 
-        if (prev == running) return;
+        if (prev == running) {
+            return;
+        }
 
         if (running) {
             if (lastChecked == null || lastChecked.isBlank()) {
                 updateLastChecked();
             }
             initTimer();
-            if (!pollingTimer.isRunning()) pollingTimer.start();
+            if (!pollingTimer.isRunning()) {
+                pollingTimer.start();
+            }
         } else {
-            if (pollingTimer != null && pollingTimer.isRunning()) pollingTimer.stop();
+            if (pollingTimer != null && pollingTimer.isRunning()) {
+                pollingTimer.stop();
+            }
         }
     }
 
-    public int getPollingInterval() { return pollingInterval; }
+    public int getPollingInterval() {
+        return pollingInterval;
+    }
 
     public void setPollingInterval(int pollingInterval) {
         this.pollingInterval = pollingInterval;
@@ -112,15 +127,23 @@ public class RoigMediaPollingComponent extends JPanel implements Serializable {
         }
     }
 
-    public String getToken() { return token; }
-    public void setToken(String token) { this.token = token; }
+    public String getToken() {
+        return token;
+    }
 
-    public String getLastChecked() { return lastChecked; }
-    public void setLastChecked(String lastChecked) { this.lastChecked = lastChecked; }
+    public void setToken(String token) {
+        this.token = token;
+    }
 
+    public String getLastChecked() {
+        return lastChecked;
+    }
+
+    public void setLastChecked(String lastChecked) {
+        this.lastChecked = lastChecked;
+    }
 
     // ===================== ICONO =====================
-
     private void initLayoutAndIcon() {
         setLayout(new java.awt.BorderLayout());
         javax.swing.JLabel label = new javax.swing.JLabel();
@@ -142,34 +165,43 @@ public class RoigMediaPollingComponent extends JPanel implements Serializable {
         add(label, java.awt.BorderLayout.CENTER);
     }
 
-
     // ===================== TIMER =====================
-
-    /** Crea el Timer si no existe. */
+    /**
+     * Crea el Timer si no existe.
+     */
     private void initTimer() {
-        if (pollingTimer != null) return;
+        if (pollingTimer != null) {
+            return;
+        }
 
         int seconds = (pollingInterval > 0) ? pollingInterval : 10;
         pollingTimer = new Timer(seconds * 1000, e -> checkServerForNewMedia());
         pollingTimer.setRepeats(true);
     }
 
-
     // ===================== POLLING =====================
-
     /**
-     * Método llamado periódicamente por el Timer.
-     * Obtiene media nuevos y lanza el evento si procede.
+     * Método llamado periódicamente por el Timer. Obtiene media nuevos y lanza
+     * el evento si procede.
      */
     private void checkServerForNewMedia() {
-        if (!running) return;
-        if (token == null || token.isBlank()) return;
-        if (apiUrl == null || apiUrl.isBlank()) return;
+        if (!running) {
+            return;
+        }
+        if (token == null || token.isBlank()) {
+            return;
+        }
+        if (apiUrl == null || apiUrl.isBlank()) {
+            return;
+        }
+
+        System.out.println("[POLL] tick ");
 
         try {
             ensureApiClient();
 
             List<Media> server = apiClient.getMediaAddedSince(lastChecked, token);
+
             if (server == null || server.isEmpty()) {
                 updateLastChecked();
                 return;
@@ -196,48 +228,59 @@ public class RoigMediaPollingComponent extends JPanel implements Serializable {
         }
     }
 
-
     // ===================== API CLIENT =====================
-
-    /** Inicializa ApiClient si aún no existe. */
+    /**
+     * Inicializa ApiClient si aún no existe.
+     */
     private void ensureApiClient() {
-        if (apiClient == null) apiClient = new ApiClient(apiUrl);
+        if (apiClient == null) {
+            apiClient = new ApiClient(apiUrl);
+        }
     }
 
-    /** Actualiza lastChecked con la hora actual (UTC) en ISO_OFFSET_DATE_TIME. */
+    /**
+     * Actualiza lastChecked con la hora actual (UTC) en ISO_OFFSET_DATE_TIME.
+     */
     private void updateLastChecked() {
         this.lastChecked = OffsetDateTime.now(ZoneOffset.UTC)
                 .format(DateTimeFormatter.ISO_OFFSET_DATE_TIME);
     }
 
-
     // ===================== EVENTOS =====================
-
     public void addMediaListener(MediaListener l) {
-        if (l != null && !mediaListeners.contains(l)) mediaListeners.add(l);
+        if (l != null && !mediaListeners.contains(l)) {
+            mediaListeners.add(l);
+        }
     }
 
     public void removeMediaListener(MediaListener l) {
         mediaListeners.remove(l);
     }
 
-    /** Notifica a los listeners que se ha detectado nuevo media. */
+    /**
+     * Notifica a los listeners que se ha detectado nuevo media.
+     */
     protected void fireNewMediaEvent(List<Media> newItems) {
-        if (newItems == null || newItems.isEmpty()) return;
-        if (mediaListeners.isEmpty()) return;
+        if (newItems == null || newItems.isEmpty()) {
+            return;
+        }
+        if (mediaListeners.isEmpty()) {
+            return;
+        }
 
         String ts = LocalDateTime.now().format(DateTimeFormatter.ISO_LOCAL_DATE_TIME);
         MediaEvent evt = new MediaEvent(this, newItems, ts);
 
         for (MediaListener ml : new ArrayList<>(mediaListeners)) {
-            try { ml.onNewMediaFound(evt); }
-            catch (Exception ex) { ex.printStackTrace(); }
+            try {
+                ml.onNewMediaFound(evt);
+            } catch (Exception ex) {
+                ex.printStackTrace();
+            }
         }
     }
 
-
     // ===================== WRAPPERS PÚBLICOS =====================
-
     public String login(String email, String password) throws Exception {
         ensureApiClient();
         String jwt = apiClient.login(email, password);
